@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/ach.h
+signal.h
+-
+
+/home/munzir/Me/5-Work/01-PhD/01-WholeBodyControlAttempt1/39-ach/src/test/achtest.c
+config.h
+/home/munzir/Me/5-Work/01-PhD/01-WholeBodyControlAttempt1/39-ach/src/test/config.h
+string.h
+-
+time.h
+-
+stdlib.h
+-
+unistd.h
+-
+inttypes.h
+-
+sys/wait.h
+-
+sched.h
+-
+pthread.h
+-
+stdio.h
+-
+ach.h
+/home/munzir/Me/5-Work/01-PhD/01-WholeBodyControlAttempt1/39-ach/src/test/ach.h
+

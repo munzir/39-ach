@@ -1,0 +1,1 @@
+/usr/bin/cc -fPIC -g  -shared -Wl,-soname,libach.so -o libach.so CMakeFiles/ach.dir/src/ach.o CMakeFiles/ach.dir/src/pipe.o -lpthread -lrt 

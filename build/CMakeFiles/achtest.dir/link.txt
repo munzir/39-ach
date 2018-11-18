@@ -1,0 +1,1 @@
+/usr/bin/cc -g  -rdynamic CMakeFiles/achtest.dir/src/test/achtest.o  -o achtest -Wl,-rpath,/home/munzir/Me/5-Work/01-PhD/01-WholeBodyControlAttempt1/39-ach/build libach.so -lpthread -lrt -lm 
