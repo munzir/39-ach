@@ -1,0 +1,9 @@
+/usr/local/include/ach.h
+/usr/local/include/Ach.hpp
+/usr/local/lib/libach.so
+/usr/local/lib/libachcpp.so
+/usr/local/bin/ach
+/usr/local/bin/achcop
+/usr/local/bin/achd
+/usr/local/bin/achcat
+/usr/local/bin/achbench

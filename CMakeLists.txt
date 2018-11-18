@@ -51,18 +51,18 @@ install( TARGETS ach DESTINATION lib )
 # This needs to manually kept in sync with the libtool versions
 # Libtool-generated versions are authoratative
 # Does not correspond to the package version
-SET_TARGET_PROPERTIES( ach PROPERTIES
-                       SOVERSION 1     # Major version
-                       VERSION 1.2.0 ) # Major.minor.patch
+#SET_TARGET_PROPERTIES( ach PROPERTIES
+#                       SOVERSION 1     # Major version
+#                       VERSION 1.2.0 ) # Major.minor.patch
 
 
 
 add_library(achcpp SHARED cpp/achcpp.cpp)
 target_link_libraries(achcpp pthread)
 install( TARGETS achcpp DESTINATION lib )
-SET_TARGET_PROPERTIES( achcpp PROPERTIES
-                       SOVERSION 0     # Major version
-                       VERSION 0.0.0 ) # Major.minor.patch
+#SET_TARGET_PROPERTIES( achcpp PROPERTIES
+#                       SOVERSION 0     # Major version
+#                       VERSION 0.0.0 ) # Major.minor.patch
 
 
 ## achtool ##
