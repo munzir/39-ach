@@ -1,5 +1,5 @@
-OVERVIEW
-========
+## OVERVIEW
+
 Ach is an Inter-Process Communication (IPC) mechanism and library. It
 is especially suited for communication in real-time systems that
 sample data from physical processes. Ach eliminates the Head-of-Line
@@ -9,9 +9,17 @@ has been tested and demonstrated on a variety of physical robotic
 systems. Source code for Ach is available under an Open Source
 BSD-style license.
 
-INSTALLATION
-============
-    ./configure && make && make install
+## Installation
+
+    sudo rm -r build
+    mkdir build
+    cd build
+    cmake ..
+    make
+    sudo make install
+
+
+## Old Readme
 
 See the INSTALL file for details.
 
