@@ -49,6 +49,10 @@
 #include "config.h"
 #endif
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <time.h>
 #include <stdlib.h>
 #include <errno.h>

@@ -49,6 +49,10 @@
 #include "config.h"
 #endif
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <time.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -269,34 +273,102 @@ chan_lock( ach_channel_t *chan ) {
     return check_lock( i, chan, 0 );
 }
 
-static enum ach_status
-rdlock( ach_channel_t *chan, int wait, const struct timespec *abstime ) {
+static enum ach_status rdlock(ach_channel_t *chan, int wait,
+                              const struct timespec *abstime) {
+  ach_header_t *shm = chan->shm;
+  {
+    enum ach_status r = chan_lock(chan);
+    if (ACH_OK != r) return r;
+  }
+  enum ach_status r = ACH_BUG;
 
-    ach_header_t *shm = chan->shm;
-    {
-        enum ach_status r = chan_lock(chan);
-        if( ACH_OK != r ) return r;
+  while (ACH_BUG == r) {
+    if (chan->cancel) { /* check operation cancelled */
+      pthread_mutex_unlock(&shm->sync.mutex);
+      r = ACH_CANCELED;
+    } else if (!wait)
+      r = ACH_OK; /* check no wait */
+    else if (chan->seq_num != shm->last_seq)
+      r = ACH_OK; /* check if got a frame */
+    /* else condition wait */
+    else {
+      int i = abstime ? pthread_cond_timedwait(&shm->sync.cond,
+                                               &shm->sync.mutex, abstime)
+                      : pthread_cond_wait(&shm->sync.cond, &shm->sync.mutex);
+      enum ach_status c = check_lock(i, chan, 1);
+      if (ACH_OK != c) r = c;
+      /* check r and condition next iteration */
     }
-    enum ach_status r = ACH_BUG;
+  }
 
-    while(ACH_BUG == r) {
-        if( chan->cancel ) {  /* check operation cancelled */
-            pthread_mutex_unlock( &shm->sync.mutex );
-            r = ACH_CANCELED;
-        } else if( !wait ) r = ACH_OK;                          /* check no wait */
-        else if ( chan->seq_num != shm->last_seq ) r = ACH_OK;  /* check if got a frame */
-        /* else condition wait */
-        else {
-            int i = abstime ?
-                pthread_cond_timedwait( &shm->sync.cond,  &shm->sync.mutex, abstime ) :
-                pthread_cond_wait( &shm->sync.cond,  &shm->sync.mutex );
-            enum ach_status c = check_lock(i, chan, 1);
-            if( ACH_OK != c ) r = c;
-            /* check r and condition next iteration */
-        }
+  return r;
+}
+
+static enum ach_status rdlock_loud(ach_channel_t *chan, int wait,
+                                   const struct timespec *abstime) {
+  fprintf(stdout, "\n6.1 ");
+  fflush(stdout);
+  ach_header_t *shm = chan->shm;
+  {
+    fprintf(stdout, "6.2 ");
+    fflush(stdout);
+    enum ach_status r = chan_lock(chan);
+    fprintf(stdout, "6.3 ");
+    fflush(stdout);
+    if (ACH_OK != r) return r;
+  }
+  fprintf(stdout, "6.4 ");
+  fflush(stdout);
+  enum ach_status r = ACH_BUG;
+
+  while (ACH_BUG == r) {
+    if (chan->cancel) { /* check operation cancelled */
+      fprintf(stdout, "6.401 ");
+      fflush(stdout);
+      pthread_mutex_unlock(&shm->sync.mutex);
+      fprintf(stdout, "6.402 ");
+      fflush(stdout);
+      r = ACH_CANCELED;
+    } else if (!wait) {
+      fprintf(stdout, "6.411 ");
+      fflush(stdout);
+      r = ACH_OK; /* check no wait */
+    } else if (chan->seq_num != shm->last_seq) {
+      fprintf(stdout, "6.421 ");
+      fflush(stdout);
+      r = ACH_OK; /* check if got a frame */
+      /* else condition wait */
+    } else {
+      fprintf(stdout, "6.431 ");
+      fflush(stdout);
+      int i;
+      if (abstime) {
+        fprintf(stdout, "6.43101 ");
+        fflush(stdout);
+        struct timespec curr;
+        clock_gettime(CLOCK_MONOTONIC, &curr);
+        fprintf(stdout, "(curr: %lds:%ldns, abs: %lds:%ldns) ", curr.tv_sec,
+                curr.tv_nsec, abstime->tv_sec, abstime->tv_nsec);
+        fflush(stdout);
+        i = pthread_cond_timedwait(&shm->sync.cond, &shm->sync.mutex, abstime);
+      } else {
+        fprintf(stdout, "6.43111 ");
+        fflush(stdout);
+        i = pthread_cond_wait(&shm->sync.cond, &shm->sync.mutex);
+      }
+      fprintf(stdout, "6.432 ");
+      fflush(stdout);
+      enum ach_status c = check_lock(i, chan, 1);
+      fprintf(stdout, "6.433 ");
+      fflush(stdout);
+      if (ACH_OK != c) r = c;
+      /* check r and condition next iteration */
     }
+  }
 
-    return r;
+  fprintf(stdout, "6.5 ");
+  fflush(stdout);
+  return r;
 }
 
 static enum ach_status unrdlock( ach_header_t *shm ) {
@@ -331,6 +403,32 @@ static ach_status_t unwrlock( ach_header_t *shm ) {
     if( pthread_cond_broadcast( & shm->sync.cond ) )
         return ACH_FAILED_SYSCALL;
 
+    return ACH_OK;
+}
+
+static ach_status_t unwrlock_loud( ach_header_t *shm ) {
+    /* mark clean */
+    fprintf(stdout, "\n19.1 "); fflush(stdout);
+    assert( 1 == shm->sync.dirty );
+    shm->sync.dirty = 0;
+
+    /* unlock */
+    fprintf(stdout, "19.2 "); fflush(stdout);
+    int r = pthread_mutex_unlock( & shm->sync.mutex );
+    if( r ) {
+        fprintf(stdout, "19.3 "); fflush(stdout);
+        return ACH_FAILED_SYSCALL;
+    }
+
+    /* broadcast to wake up waiting readers */
+    fprintf(stdout, "19.4 "); fflush(stdout);
+    r = pthread_cond_broadcast( & shm->sync.cond );
+    if( r ) {
+        fprintf(stdout, "19.5 "); fflush(stdout);
+        return ACH_FAILED_SYSCALL;
+    }
+
+    fprintf(stdout, "19.6 "); fflush(stdout);
     return ACH_OK;
 }
 
@@ -709,6 +807,99 @@ ach_get( ach_channel_t *chan, void *buf, size_t size,
     return (ACH_OK == retval && missed_frame) ? ACH_MISSED_FRAME : retval;
 }
 
+enum ach_status
+ach_get_loud( ach_channel_t *chan, void *buf, size_t size,
+         size_t *frame_size,
+         const struct timespec *ACH_RESTRICT abstime,
+         int options ) {
+    fprintf(stdout, "\n1 "); fflush(stdout);
+    ach_header_t *shm = chan->shm;
+    fprintf(stdout, "2 "); fflush(stdout);
+    ach_index_t *index_ar = ACH_SHM_INDEX(shm);
+
+    /* Check guard bytes */
+    {
+        fprintf(stdout, "3 "); fflush(stdout);
+        enum ach_status r = check_guards(shm);
+        fprintf(stdout, "4 "); fflush(stdout);
+        if( ACH_OK != r ) return r;
+    }
+
+    fprintf(stdout, "5 "); fflush(stdout);
+    const bool o_wait = options & ACH_O_WAIT;
+    const bool o_last = options & ACH_O_LAST;
+    const bool o_copy = options & ACH_O_COPY;
+
+    /* take read lock */
+    {
+        fprintf(stdout, "6 "); fflush(stdout);
+        enum ach_status r = rdlock_loud( chan, o_wait, abstime );
+        fprintf(stdout, "7 "); fflush(stdout);
+        if( ACH_OK != r ) return r;
+    }
+    fprintf(stdout, "8 "); fflush(stdout);
+    assert( chan->seq_num <= shm->last_seq );
+
+    fprintf(stdout, "9 "); fflush(stdout);
+    enum ach_status retval = ACH_BUG;
+    bool missed_frame = 0;
+
+    /* get the data */
+    if( (chan->seq_num == shm->last_seq && !o_copy) || 0 == shm->last_seq ) {
+        /* no entries */
+        fprintf(stdout, "9.01 "); fflush(stdout);
+        assert(!o_wait);
+        fprintf(stdout, "9.02 "); fflush(stdout);
+        retval = ACH_STALE_FRAMES;
+    } else {
+        /* Compute the index to read */
+        fprintf(stdout, "9.11 "); fflush(stdout);
+        size_t read_index;
+        if( o_last ) {
+            /* normal case, get last */
+            fprintf(stdout, "9.1101 "); fflush(stdout);
+            read_index = last_index_i(shm);
+        } else if (!o_last &&
+                   index_ar[chan->next_index].seq_num == chan->seq_num + 1) {
+            /* normal case, get next */
+            fprintf(stdout, "9.1111 "); fflush(stdout);
+            read_index = chan->next_index;
+        } else {
+            /* exception case, figure out which frame */
+            fprintf(stdout, "9.1121 "); fflush(stdout);
+            if (chan->seq_num == shm->last_seq) {
+                /* copy last */
+                fprintf(stdout, "9.112101 "); fflush(stdout);
+                assert(o_copy);
+                fprintf(stdout, "9.112102 "); fflush(stdout);
+                read_index = last_index_i(shm);
+            } else {
+                /* copy oldest */
+                fprintf(stdout, "9.112111 "); fflush(stdout);
+                read_index = oldest_index_i(shm);
+            }
+        }
+        fprintf(stdout, "9.12 "); fflush(stdout);
+        if( index_ar[read_index].seq_num > chan->seq_num + 1 ) { missed_frame = 1; }
+
+        /* read from the index */
+        fprintf(stdout, "9.13 "); fflush(stdout);
+        retval = ach_get_from_offset( chan, read_index, (char*)buf, size,
+                                      frame_size );
+
+        fprintf(stdout, "9.14 "); fflush(stdout);
+        assert( index_ar[read_index].seq_num > 0 );
+    }
+
+    /* release read lock */
+    fprintf(stdout, "10 "); fflush(stdout);
+    ach_status_t r = unrdlock( shm );
+    fprintf(stdout, "11 "); fflush(stdout);
+    if( ACH_OK != r ) return r;
+
+    fprintf(stdout, "12 "); fflush(stdout);
+    return (ACH_OK == retval && missed_frame) ? ACH_MISSED_FRAME : retval;
+}
 
 enum ach_status
 ach_flush( ach_channel_t *chan ) {
@@ -808,6 +999,118 @@ ach_put( ach_channel_t *chan, const void *buf, size_t len ) {
 
     /* release write lock */
     return unwrlock( shm );
+
+}
+
+enum ach_status
+ach_put_loud( ach_channel_t *chan, const void *buf, size_t len ) {
+    if( 0 == len || NULL == buf || NULL == chan->shm ) {
+        fprintf(stdout, "\n1 "); fflush(stdout);
+        return ACH_EINVAL;
+    }
+
+    fprintf(stdout, "2 "); fflush(stdout);
+    ach_header_t *shm = chan->shm;
+
+    /* Check guard bytes */
+    {
+        fprintf(stdout, "3 "); fflush(stdout);
+        enum ach_status r = check_guards(shm);
+        fprintf(stdout, "4 "); fflush(stdout);
+        if( ACH_OK != r ) return r;
+    }
+
+    if( shm->data_size < len ) {
+        fprintf(stdout, "5 "); fflush(stdout);
+        return ACH_OVERFLOW;
+    }
+
+    fprintf(stdout, "6 "); fflush(stdout);
+    ach_index_t *index_ar = ACH_SHM_INDEX(shm);
+    fprintf(stdout, "7 "); fflush(stdout);
+    uint8_t *data_ar = ACH_SHM_DATA(shm);
+
+    if( len > shm->data_size ) {
+        fprintf(stdout, "8 "); fflush(stdout);
+        return ACH_OVERFLOW;
+    }
+
+    /* take write lock */
+    fprintf(stdout, "9 "); fflush(stdout);
+    wrlock( chan );
+
+    /* find next index entry */
+    fprintf(stdout, "10 "); fflush(stdout);
+    ach_index_t *idx = index_ar + shm->index_head;
+
+    /* clear entry used by index */
+    if( 0 == shm->index_free ) {
+      fprintf(stdout, "10.01 "); fflush(stdout);
+      free_index(shm,shm->index_head);
+    }
+    else {
+      fprintf(stdout, "10.11 "); fflush(stdout);
+      assert(0== index_ar[shm->index_head].seq_num);
+    }
+
+    fprintf(stdout, "11 "); fflush(stdout);
+    assert( shm->index_free > 0 );
+
+    /* clear overlapping entries */
+    size_t i;
+    fprintf(stdout, "12 "); fflush(stdout); int print_iter = 1;
+    for(i = (shm->index_head + shm->index_free) % shm->index_cnt;
+        shm->data_free < len;
+        i = (i + 1) % shm->index_cnt) {
+        fprintf(stdout, "12.%03d ", print_iter); print_iter++; fflush(stdout);
+        assert( i != shm->index_head );
+        free_index(shm,i);
+    }
+
+    fprintf(stdout, "13 "); fflush(stdout);
+    assert( shm->data_free >= len );
+
+    /* copy buffer */
+    if( shm->data_size - shm->data_head >= len ) {
+        /* simply copy */
+        fprintf(stdout, "13.01 "); fflush(stdout);
+        memcpy( data_ar + shm->data_head, buf, len );
+    } else {
+        /* wraparound copy */
+        fprintf(stdout, "13.11 "); fflush(stdout);
+        size_t end_cnt = shm->data_size - shm->data_head;
+        fprintf(stdout, "13.12 "); fflush(stdout);
+        memcpy( data_ar + shm->data_head, buf, end_cnt);
+        fprintf(stdout, "13.13 "); fflush(stdout);
+        memcpy( data_ar, (uint8_t*)buf + end_cnt, len - end_cnt );
+    }
+
+    /* modify counts */
+    fprintf(stdout, "14 "); fflush(stdout);
+    shm->last_seq++;
+    idx->seq_num = shm->last_seq;
+    idx->size = len;
+    idx->offset = shm->data_head;
+
+    fprintf(stdout, "15 "); fflush(stdout);
+    shm->data_head = (shm->data_head + len) % shm->data_size;
+    shm->data_free -= len;
+    shm->index_head = (shm->index_head + 1) % shm->index_cnt;
+    shm->index_free --;
+
+    fprintf(stdout, "16 "); fflush(stdout);
+    assert( shm->index_free <= shm->index_cnt );
+    fprintf(stdout, "17 "); fflush(stdout);
+    assert( shm->data_free <= shm->data_size );
+    fprintf(stdout, "18 "); fflush(stdout);
+    assert( shm->last_seq > 0 );
+
+    /* release write lock */
+    fprintf(stdout, "19 "); fflush(stdout);
+    enum ach_status ret = unwrlock_loud( shm );
+
+    fprintf(stdout, "20 "); fflush(stdout);
+    return ret;
 
 }
 
