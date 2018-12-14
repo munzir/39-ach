@@ -48,6 +48,10 @@
 #include "config.h"
 #endif
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>

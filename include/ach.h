@@ -428,6 +428,12 @@ extern "C" {
              const struct timespec *ACH_RESTRICT abstime,
              int options );
 
+    enum ach_status
+    ach_get_loud( ach_channel_t *chan, void *buf, size_t size,
+             size_t *frame_size,
+             const struct timespec *ACH_RESTRICT abstime,
+             int options );
+
     /** Writes a new message in the channel.
 
         \pre chan has been opened with ach_open()
@@ -442,6 +448,9 @@ extern "C" {
     */
     enum ach_status
     ach_put( ach_channel_t *chan, const void *buf, size_t len );
+
+    enum ach_status
+    ach_put_loud( ach_channel_t *chan, const void *buf, size_t len );
 
 
     /** Discards all previously received messages for this handle.  Does
