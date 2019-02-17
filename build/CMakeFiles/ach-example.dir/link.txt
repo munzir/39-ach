@@ -1,1 +1,0 @@
-/usr/bin/cc -g  -rdynamic CMakeFiles/ach-example.dir/src/ach-example.o  -o ach-example -Wl,-rpath,/home/munzir/Me/5-Work/01-PhD/01-WholeBodyControlAttempt1/39-ach/build libach.so -lpthread -lrt -lm 

@@ -15,9 +15,12 @@ BSD-style license.
     mkdir build
     cd build
     cmake ..
-    make
     sudo make install
 
+## Uninstall
+ To remove system files created by the installation of this repo.
+
+    sudo make uninstall
 
 ## Old Readme
 
